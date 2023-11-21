@@ -1,88 +1,49 @@
+import gym
 import numpy as np
+import random
+env = gym.make('FrozenLake-v1', is_slippery=False)
+action_space_size=env.action_space.n
+action_space_size
+state_space_size=env.observation_space.n
+state_space_size
+qtable=np.zeros((state_space_size, action_space_size))
+qtable
+#hyperparameters
+total_episodes=10000
+learning_rate=0.2
+max_steps=100
+gamma=0.99
 
-class FrozenLake:
-    def __init__(self, size=4, start_state=0, goal_state=None):
-        self.size = size
-        self.start_state = start_state
-        self.goal_state = goal_state if goal_state is not None else size * size - 1
-        self.current_state = start_state
-        self.done = False
+epsilon=1
+max_epsilon=1
+min_epsilon=.01
+decay_rate=0.001
 
-    def reset(self):
-        self.current_state = self.start_state
-        self.done = False
-        return self.current_state
 
-    def step(self, action):
-        if self.done:
-            raise ValueError("Episode has already terminated. Please reset the environment.")
+rewards=[]
+for episode in range(total_episodes):
+  state=env.reset()
+  step=0
+  done=False
+  total_rewards=0
 
-        if action not in [0, 1, 2, 3]:  # 0: left, 1: down, 2: right, 3: up
-            raise ValueError("Invalid action. Use 0, 1, 2, or 3.")
-
-        row, col = divmod(self.current_state, self.size)
-
-        # Transition dynamics
-        if action == 0:  # left
-            col = max(0, col - 1)
-        elif action == 1:  # down
-            row = min(self.size - 1, row + 1)
-        elif action == 2:  # right
-            col = min(self.size - 1, col + 1)
-        elif action == 3:  # up
-            row = max(0, row - 1)
-
-        new_state = row * self.size + col
-
-        # Reward and done flag
-        if new_state == self.goal_state:
-            reward = 1.0
-            self.done = True
-        else:
-            reward = 0.0
-
-        self.current_state = new_state
-
-        return new_state, reward, self.done
-
-def td_learning(env, num_episodes=1000, alpha=0.1, gamma=0.99):
-    # Initialize the value function
-    V = np.zeros(env.size * env.size)
-
-    for episode in range(num_episodes):
-        state = env.reset()
-        done = False
-
-        while not done:
-            # Choose an action using an epsilon-greedy policy
-            action = epsilon_greedy_policy(env, V, state, epsilon=0.1)
-
-            # Take the chosen action and observe the next state and reward
-            next_state, reward, done = env.step(action)
-
-            # Update the value function using TD update rule
-            td_error = reward + gamma * V[next_state] - V[state]
-            V[state] = V[state] + alpha * td_error
-
-            state = next_state
-
-    return V
-
-def epsilon_greedy_policy(env, V, state, epsilon):
-    # Epsilon-greedy policy: choose a random action with probability epsilon,
-    # otherwise choose the action with the highest estimated value
-    if np.random.rand() < epsilon:
-        return np.random.choice([0, 1, 2, 3])
+  for step in range(max_steps):
+    if random.uniform(0,1)>epsilon:
+      action=np.argmax(qtable[state,:]) #exploitation
     else:
-        return np.argmax([V[state] for _ in range(4)])
+      action=env.action_space.sample() # Exploration
 
-if __name__ == "__main__":
-    # Create Frozen Lake environment
-    env = FrozenLake(size=4, start_state=0, goal_state=15)
+    new_state, reward, done, info =env.step(action)
+    max_new_state=np.max(qtable[new_state,:])
+    qtable[state,action] = qtable[state,action] + learning_rate*(reward+gamma*max_new_state-qtable[state,action])
 
-    # Perform TD learning
-    learned_values = td_learning(env)
+    total_rewards+= reward
+    state= new_state
 
-    # Print the learned values
-    print("Learned Values:")
-    print(learned_values.reshape(4, 4))
+    if done:
+      break
+
+  epsilon = min_epsilon + (max_epsilon - min_epsilon)*np.exp(-decay_rate*episode)
+  rewards.append(total_rewards)
+
+print ("Score:", str(sum(rewards)/total_episodes))
